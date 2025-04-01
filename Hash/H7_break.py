@@ -1,3 +1,14 @@
+#No Difference
+from Crypto.Util.number import bytes_to_long, long_to_bytes
+import telnetlib
+import json
+import re
+from pkcs1 import emsa_pkcs1_v15
+from sage.all import *
+import fastecdsa
+from fastecdsa.point import Point
+from Crypto.Util.Padding import pad
+
 SBOX = [
     0xf0, 0xf3, 0xf1, 0x69, 0x45, 0xff, 0x2b, 0x4f, 0x63, 0xe1, 0xf3, 0x71, 0x44, 0x1b, 0x35, 0xc8,
     0xbe, 0xc0, 0x1a, 0x89, 0xec, 0x3e, 0x1d, 0x3a, 0xe3, 0xbe, 0xd3, 0xcf, 0x20, 0x4e, 0x56, 0x22,
@@ -16,12 +27,7 @@ SBOX = [
     0x30, 0xe6, 0x80, 0xfb, 0x40, 0xda, 0xd3, 0xc9, 0xb1, 0xe2, 0x5e, 0xff, 0xd1, 0xd7, 0x92, 0xcc,
     0x79, 0x7e, 0x13, 0x7a, 0x8a, 0x3b, 0x2, 0xec, 0x37, 0x87, 0xa9, 0x43, 0x6f, 0x9a, 0x43, 0xe4,
 ]
-FLAG = "crypto{??????????????????}"
 
-
-# permute has the following properties:
-# permute(permute(x)) = x
-# permute(a) ^ permute(b) = permute(a ^ b)
 def permute(block):
     result = [0 for _ in range(8)]
     for i in range(8):
@@ -33,50 +39,39 @@ def permute(block):
 
 
 def substitute(block):
-    # print(block)
     return [SBOX[x] for x in block]
 
-
-def hash(data):
-    if len(data) % 4 != 0:
-        return None
-
-    state = [16, 32, 48, 80, 80, 96, 112, 128]
-    temp = None
-    for i in range(0, len(data), 4):
-        block = data[i:i+4]
-        state[4] ^= block[0]
-        state[5] ^= block[1]
-        state[6] ^= block[2]
-        state[7] ^= block[3]
-        state = permute(state)
-        state = substitute(state)
-        if i == 0:
-            temp = state
-
-    for _ in range(16):
-        state = permute(state)
-        state = substitute(state)    
-
-    output = []
-    for _ in range(2):
-        output += state[4:]
-        state = permute(state)
-        state = substitute(state)
-        # print(f"State {i} {state}")
-    # print(output)
-    return bytes(output),temp
-
-def inverse_substitute(state):
-    pass
-
+data1 = [0,0,0,0]
+data2 = [0,0,0,0]
 state = [16, 32, 48, 80, 80, 96, 112, 128]
-for i in state:
-    for _,j in enumerate(SBOX):
-        if j == i:
-            print(i,_)
+for _ in range(2):
+    state = permute(state)
+    state = substitute(state)
+    data1+=state[4:]
+    data2+=state[4:]
+    state[4:] = [0]*4
+    
+data2 = data2[:-4]
 
+HOST = "socket.cryptohack.org"
+PORT = 13395
 
+def readline():
+    return tn.read_until(b"\n")
 
+def json_recv():
+    line = readline().decode()
+    st = line[line.find('{'):]
+    return json.loads(st)
 
+def json_send(hsh):
+    request = json.dumps(hsh).encode()
+    tn.write(request)
 
+tn = telnetlib.Telnet(HOST, PORT)
+print(readline())
+
+to_send = json.loads(json.dumps({"a" : bytes(data1).hex(), "b" : bytes(data2).hex()}))
+json_send(to_send)
+
+print(json_recv())
